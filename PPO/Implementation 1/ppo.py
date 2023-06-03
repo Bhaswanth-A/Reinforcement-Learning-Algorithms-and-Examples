@@ -31,22 +31,6 @@ class PPO:
 
         self.critic_optim = Adam(self.critic.parameters(), lr=self.lr)
 
-    
-    def get_action(self, obs):
-
-        # Query the actor network for a mean action
-        # Same thing as calling self.actor.forward(obs)
-        mean = self.actor(np.array(list(obs[0]), dtype=np.float32))
-
-        # Create multivariate normal distribution
-        dist = MultivariateNormal(mean, self.cov_mat)
-
-        # Sample an action from the distribution and get its log prob
-        action = dist.sample()
-        log_prob = dist.log_prob(action)
-
-        return action.detach().numpy(), log_prob.detach() # Detaches tensor from computation graph
-
 
     def _init_hyperparameters(self):
         self.timesteps_per_batch = 4800
@@ -55,79 +39,6 @@ class PPO:
         self.n_updates_per_iteration = 5
         self.clip = 0.2     # As recommended by the paper
         self.lr = 0.005     # learning rate
-
-
-    # ALGORITHM STEP 3
-    def rollout(self):
-        # Batch data - we collect data from a set of episodes by running the actor policy
-        batch_obs = []
-        batch_acts = []
-        batch_log_probs = []
-        batch_rews = []
-        batch_rtgs = [] # batch rewards to-go
-        batch_lens = [] # episodic lengths in batch
-
-        # In our batch, we’ll be running episodes until we hit self.timesteps_per_batch 
-        # timesteps; in the process, we shall collect observations, actions, log probabilities 
-        # of those actions, rewards, rewards-to-go, and lengths of each episode.
-
-        # Number of timesteps run so far
-        t = 0
-
-        while t <  self.timesteps_per_batch:
-
-            ep_rews = []
-
-            obs = self.env.reset()
-            done = False
-
-            for ep_t in range(self.max_timesteps_per_episode):
-                t += 1
-
-                batch_obs.append(obs) # Collect observation
-
-                action, log_prob = self.get_action(obs)
-
-                obs, rew, done, _, _ = self.env.step(action)
-
-                ep_rews.append(rew)
-                batch_acts.append(action)
-                batch_log_probs.append(log_prob)
-
-                if done:
-                    break
-            
-            # Collect episodic lengths and rewards
-            batch_lens.append(ep_t+1)
-            batch_rews.append(ep_rews)
-
-        # Reshape data to tensors
-        batch_obs = torch.tensor(batch_obs, dtype=torch.float)
-        batch_acts = torch.tensor(batch_acts, dtype=torch.float)
-        batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
-
-
-        # ALGORITHM STEP 4
-        batch_rtgs = self.compute_rtgs(batch_rews)
-
-        return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
-    
-
-    # ALGORITHM STEP 4
-    def compute_rtgs(self, batch_rews):
-        batch_rtgs = []
-        
-        # Iterate through each episode backwards to maintain same order in batch_rtgs
-        for ep_rews in reversed(batch_rews):
-            discounted_reward = 0
-
-            for rew in reversed(ep_rews):
-                discounted_reward = rew + discounted_reward * self.gamma
-                batch_rtgs.insert(0, discounted_reward)
-
-        batch_rtgs = torch.tensor(batch_rtgs, dtype=torch.float)
-
-        return batch_rtgs
 
 
     def learn(self, total_timesteps):
@@ -182,6 +93,99 @@ class PPO:
             self.critic_optim.zero_grad()
             critic_loss.backward()
             self.critic_optim.step()
+
+
+
+    # ALGORITHM STEP 3
+    def rollout(self):
+        # Batch data - we collect data from a set of episodes by running the actor policy
+        batch_obs = []
+        batch_acts = []
+        batch_log_probs = []
+        batch_rews = []
+        batch_rtgs = [] # batch rewards to-go
+        batch_lens = [] # episodic lengths in batch
+
+        # In our batch, we’ll be running episodes until we hit self.timesteps_per_batch 
+        # timesteps; in the process, we shall collect observations, actions, log probabilities 
+        # of those actions, rewards, rewards-to-go, and lengths of each episode.
+
+        # Number of timesteps run so far
+        t = 0
+
+        while t <  self.timesteps_per_batch:
+
+            ep_rews = []
+
+            obs = self.env.reset()
+            done = False
+
+            for ep_t in range(self.max_timesteps_per_episode):
+                t += 1
+                print(t)
+
+                batch_obs.append(obs) # Collect observation
+                print(obs)
+
+                action, log_prob = self.get_action(obs)
+
+                obs, rew, done, _, _ = self.env.step(action)
+
+                ep_rews.append(rew)
+                batch_acts.append(action)
+                batch_log_probs.append(log_prob)
+
+                if done:
+                    break
+            
+            # Collect episodic lengths and rewards
+            batch_lens.append(ep_t+1)
+            batch_rews.append(ep_rews)
+
+        # Reshape data to tensors
+        batch_obs = torch.tensor(batch_obs, dtype=torch.float)
+        batch_acts = torch.tensor(batch_acts, dtype=torch.float)
+        batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
+
+
+        # ALGORITHM STEP 4
+        batch_rtgs = self.compute_rtgs(batch_rews)
+
+        return batch_obs, batch_acts, batch_log_probs, batch_rtgs, batch_lens
+    
+    
+    def get_action(self, obs):
+
+        # Query the actor network for a mean action
+        # Same thing as calling self.actor.forward(obs)
+        mean = self.actor.forward(obs)
+
+        # Create multivariate normal distribution
+        dist = MultivariateNormal(mean, self.cov_mat)
+
+        # Sample an action from the distribution and get its log prob
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+
+        return action.detach().numpy(), log_prob.detach() # Detaches tensor from computation graph
+
+    
+
+    # ALGORITHM STEP 4
+    def compute_rtgs(self, batch_rews):
+        batch_rtgs = []
+        
+        # Iterate through each episode backwards to maintain same order in batch_rtgs
+        for ep_rews in reversed(batch_rews):
+            discounted_reward = 0
+
+            for rew in reversed(ep_rews):
+                discounted_reward = rew + discounted_reward * self.gamma
+                batch_rtgs.insert(0, discounted_reward)
+
+        batch_rtgs = torch.tensor(batch_rtgs, dtype=torch.float)
+
+        return batch_rtgs
 
 
     def evaluate(self, batch_obs, batch_acts):

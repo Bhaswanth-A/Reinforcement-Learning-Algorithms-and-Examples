@@ -14,11 +14,10 @@ class FeedFowrwardNN(nn.Module):
     def forward(self, obs):
         # obs = np.array(obs, dtype=object)
         # convert observation to tensor if its a numpy array
-        print(obs)
-        if isinstance(obs, np.ndarray):
-            obs = torch.tensor(obs, dtype=torch.float32)
-        print(obs.shape)
-        print(obs.unsqueeze(dim=0).shape)
+        # print(np.asarray(obs))
+        # if isinstance(obs, list):
+        obs = torch.tensor(list(obs)[0], dtype=torch.float32)
+        obs = obs.unsqueeze(dim=0)
 
         activation1 = F.relu(self.layer1(obs))
         activation2 = F.relu(self.layer2(activation1))
