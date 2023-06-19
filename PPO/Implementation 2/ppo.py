@@ -1,3 +1,5 @@
+# Based on https://iclr-blog-track.github.io/2022/03/25/ppo-implementation-details/
+
 import argparse
 import os
 from distutils.util import strtobool
@@ -197,7 +199,7 @@ if __name__=='__main__':
         # Policy rollout
         for step in range(args.num_steps):
             global_step += 1 * args.num_envs
-            obs[step] = next_obs
+            obs[step] = next_obs    # Updates values of obs for each step. Each step will have a 4x4 matrix (4 envs and 4 obs for each)
             dones[step] = next_done 
 
             with torch.no_grad():   # No need to cache gradients during rollout
@@ -253,7 +255,7 @@ if __name__=='__main__':
                     advantages = returns - values
 
             # Flatten the batch
-            b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
+            b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)    # New size is (2048,4)
             b_logprobs = logprobs.reshape(-1)
             b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
             b_advantages = advantages.reshape(-1)
